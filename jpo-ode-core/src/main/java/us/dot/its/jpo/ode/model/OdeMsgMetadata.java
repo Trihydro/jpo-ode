@@ -15,8 +15,12 @@
  ******************************************************************************/
 package us.dot.its.jpo.ode.model;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import us.dot.its.jpo.ode.util.DateTimeUtils;
 
+@JsonPropertyOrder({ "logFileName", "recordType", "receivedMessageDetails", "payloadType", "serialId",
+      "odeReceivedAt", "schemaVersion", "maxDurationTime", "recordGeneratedAt", "recordGeneratedBy", "sanitized" })
 public class OdeMsgMetadata extends OdeObject {
 
    public enum GeneratedBy {
@@ -31,6 +35,9 @@ public class OdeMsgMetadata extends OdeObject {
    private SerialId serialId;
    private String odeReceivedAt;
    private int schemaVersion;
+   private int maxDurationTime;
+   private String odePacketID;
+   private String odeTimStartDateTime;
    private String recordGeneratedAt;
    private GeneratedBy recordGeneratedBy;
    private boolean sanitized = false;
@@ -93,6 +100,30 @@ public class OdeMsgMetadata extends OdeObject {
       schemaVersion = aSchemaVersion;
    }
 
+   public int getMaxDurationTime() {
+      return maxDurationTime;
+   }
+
+   public void setMaxDurationTime(int maxDurationTime) {
+      this.maxDurationTime = maxDurationTime;
+   }
+
+   public String getOdePacketID() {
+      return odePacketID;
+   }
+
+   public void setOdePacketID(String odePacketID) {
+      this.odePacketID = odePacketID;
+   }
+
+   public String getOdeTimStartDateTime() {
+      return odeTimStartDateTime;
+   }
+
+   public void setOdeTimStartDateTime(String odeTimStartDateTime) {
+      this.odeTimStartDateTime = odeTimStartDateTime;
+   }
+
    public String getRecordGeneratedAt() {
       return recordGeneratedAt;
    }
@@ -117,7 +148,6 @@ public class OdeMsgMetadata extends OdeObject {
       this.sanitized = sanitized;
    }
 
-   
    public static int getStaticSchemaVersion() {
       return staticSchemaVersion;
    }

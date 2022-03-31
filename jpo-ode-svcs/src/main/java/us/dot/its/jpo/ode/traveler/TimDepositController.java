@@ -16,7 +16,9 @@
 package us.dot.its.jpo.ode.traveler;
 
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.format.DateTimeParseException;
+import java.util.Date;
 
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -31,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.gson.JsonSyntaxException;
 
 import us.dot.its.jpo.ode.OdeProperties;
 import us.dot.its.jpo.ode.context.AppContext;
@@ -47,6 +48,7 @@ import us.dot.its.jpo.ode.plugin.ServiceRequest.OdeInternal;
 import us.dot.its.jpo.ode.plugin.ServiceRequest.OdeInternal.RequestVerb;
 import us.dot.its.jpo.ode.plugin.j2735.DdsAdvisorySituationData;
 import us.dot.its.jpo.ode.plugin.j2735.OdeTravelerInformationMessage;
+import us.dot.its.jpo.ode.plugin.j2735.OdeTravelerInformationMessage.DataFrame;
 import us.dot.its.jpo.ode.plugin.j2735.builders.TravelerMessageFromHumanToAsnConverter;
 import us.dot.its.jpo.ode.traveler.TimTransmogrifier.TimTransmogrifierException;
 import us.dot.its.jpo.ode.util.DateTimeUtils;
@@ -80,7 +82,7 @@ public class TimDepositController {
       public TimDepositControllerException(String errMsg) {
          super(errMsg);
       }
-      
+
    }
 
    @Autowired
@@ -119,8 +121,13 @@ public class TimDepositController {
       try {
          // Convert JSON to POJO
          odeTID = (OdeTravelerInputData) JsonUtils.fromJson(jsonString, OdeTravelerInputData.class);
-         request = odeTID.getRequest();
+         if (odeTID == null) {
+            String errMsg = "Malformed or non-compliant JSON syntax.";
+            logger.error(errMsg);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(JsonUtils.jsonKeyValue(ERRSTR, errMsg));
+         }
 
+         request = odeTID.getRequest();
          if (request == null) {
             throw new TimDepositControllerException("Request element is required as of version 3.");
          }
@@ -135,10 +142,6 @@ public class TimDepositController {
          String errMsg = "Missing or invalid argument: " + e.getMessage();
          logger.error(errMsg, e);
          return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(JsonUtils.jsonKeyValue(ERRSTR, errMsg));
-      } catch (JsonSyntaxException e) {
-         String errMsg = "Malformed or non-compliant JSON syntax.";
-         logger.error(errMsg, e);
-         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(JsonUtils.jsonKeyValue(ERRSTR, errMsg));
       }
 
       // Add metadata to message and publish to kafka
@@ -146,6 +149,29 @@ public class TimDepositController {
       OdeMsgPayload timDataPayload = new OdeMsgPayload(tim);
       OdeRequestMsgMetadata timMetadata = new OdeRequestMsgMetadata(timDataPayload, request);
 
+      // set packetID in tim Metadata
+      timMetadata.setOdePacketID(tim.getPacketID());
+      // set maxDurationTime in tim Metadata and set latest startDatetime in tim
+      // metadata
+      SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+      if (null != tim.getDataframes() && tim.getDataframes().length > 0) {
+         int maxDurationTime = 0;
+         Date latestStartDateTime = null;
+         for (DataFrame dataFrameItem : tim.getDataframes()) {
+            maxDurationTime = maxDurationTime > dataFrameItem.getDurationTime() ? maxDurationTime
+                  : dataFrameItem.getDurationTime();
+            try {
+               latestStartDateTime = (latestStartDateTime == null || (latestStartDateTime != null
+                     && latestStartDateTime.before(dateFormat.parse(dataFrameItem.getStartDateTime())))
+                           ? dateFormat.parse(dataFrameItem.getStartDateTime())
+                           : latestStartDateTime);
+            } catch (ParseException e) {
+               logger.error("Invalid dateTime parse: " + e);
+            }
+         }
+         timMetadata.setMaxDurationTime(maxDurationTime);
+         timMetadata.setOdeTimStartDateTime(dateFormat.format(latestStartDateTime));
+      }
       // Setting the SerialId to OdeBradcastTim serialId to be changed to
       // J2735BroadcastTim serialId after the message has been published to
       // OdeTimBrodcast topic
@@ -202,7 +228,6 @@ public class TimDepositController {
             asd = TimTransmogrifier.buildASD(odeTID.getRequest());
          }
          xmlMsg = TimTransmogrifier.convertToXml(asd, encodableTid, timMetadata, serialIdJ2735);
-
          logger.debug("XML representation: {}", xmlMsg);
 
          JSONObject jsonMsg = XmlUtils.toJSONObject(xmlMsg);
