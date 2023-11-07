@@ -64,8 +64,6 @@ public class SrmReceiver extends AbstractUdpReceiverPublisher {
                   continue;
                String payloadHexString = HexUtils.toHexString(payload);
                logger.debug("Packet: {}", payloadHexString);
-               
-               logger.debug("Creating Decoded SRM JSON Object...");
 
                // Add header data for the decoding process
                ZonedDateTime utc = ZonedDateTime.now(ZoneOffset.UTC);
@@ -89,8 +87,6 @@ public class SrmReceiver extends AbstractUdpReceiverPublisher {
                logger.debug("SRM JSON Object: {}", jsonObject.toString());
 
                // Submit JSON to the OdeRawEncodedMessageJson Kafka Topic
-               logger.debug("Publishing JSON SRM...");
-
                this.srmPublisher.publish(jsonObject.toString(), this.srmPublisher.getOdeProperties().getKafkaTopicOdeRawEncodedSRMJson());
             }
          } catch (Exception e) {
@@ -109,11 +105,9 @@ public class SrmReceiver extends AbstractUdpReceiverPublisher {
    public byte[] removeHeader(byte[] packet) {
       String hexPacket = HexUtils.toHexString(packet);
 
-      //logger.debug("SRM packet: {}", hexPacket);
-
       int startIndex = hexPacket.indexOf(SRM_START_FLAG);
       if (startIndex == 0) {
-         logger.info("Message is raw SRM with no headers.");
+         logger.debug("Message is raw SRM with no headers.");
       } else if (startIndex == -1) {
          logger.error("Message contains no SRM start flag.");
          return null;
